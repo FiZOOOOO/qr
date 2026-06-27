@@ -1,0 +1,35 @@
+import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+
+async function getBusinessId(userId: string) {
+  const b = await prisma.business.findUnique({ where: { userId }, select: { id: true } });
+  return b?.id;
+}
+
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: "Yetkisiz" }, { status: 401 });
+  const businessId = await getBusinessId(session.user.id);
+  if (!businessId) return NextResponse.json({ error: "İşletme bulunamadı" }, { status: 404 });
+
+  const { id } = await params;
+  const data = await req.json();
+  if (data.price) data.price = parseFloat(String(data.price));
+  if (data.calories) data.calories = parseInt(String(data.calories));
+
+  const result = await prisma.product.updateMany({ where: { id, businessId }, data });
+  if (result.count === 0) return NextResponse.json({ error: "Bulunamadı" }, { status: 404 });
+  return NextResponse.json({ ok: true });
+}
+
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: "Yetkisiz" }, { status: 401 });
+  const businessId = await getBusinessId(session.user.id);
+  if (!businessId) return NextResponse.json({ error: "İşletme bulunamadı" }, { status: 404 });
+
+  const { id } = await params;
+  await prisma.product.deleteMany({ where: { id, businessId } });
+  return NextResponse.json({ ok: true });
+}

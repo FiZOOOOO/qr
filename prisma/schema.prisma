@@ -1,0 +1,302 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  DEALER
+  BUSINESS
+}
+
+enum DealerLevel {
+  LEVEL_1
+  LEVEL_2
+  LEVEL_3
+  LEVEL_4
+}
+
+enum TableStatus {
+  EMPTY
+  OCCUPIED
+}
+
+enum OrderStatus {
+  PENDING
+  PREPARING
+  READY
+  DELIVERED
+  CANCELLED
+}
+
+enum CallStatus {
+  PENDING
+  ANSWERED
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  password  String
+  name      String
+  phone     String?
+  role      Role      @default(BUSINESS)
+  business  Business?
+  dealer    Dealer?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Business {
+  id            String            @id @default(cuid())
+  slug          String            @unique
+  name          String
+  phone         String?
+  email         String?
+  address       String?
+  sector        String?
+  userId        String            @unique
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dealerId      String?
+  dealer        Dealer?           @relation(fields: [dealerId], references: [id])
+  subscription  Subscription?
+  categories    Category[]
+  products      Product[]
+  variants      VariantTemplate[]
+  tables        Table[]
+  orders        Order[]
+  waiterCalls   WaiterCall[]
+  feedbacks     Feedback[]
+  settings      BusinessSettings?
+  announcements Announcement[]
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+}
+
+model Dealer {
+  id           String              @id @default(cuid())
+  userId       String              @unique
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balance      Float               @default(0)
+  aiCredits    Int                 @default(0)
+  businesses   Business[]
+  level        DealerLevel         @default(LEVEL_1)
+  documents    DealerDocument[]
+  transactions DealerTransaction[]
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+}
+
+model DealerDocument {
+  id        String   @id @default(cuid())
+  dealerId  String
+  dealer    Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  type      String
+  url       String
+  createdAt DateTime @default(now())
+}
+
+model DealerTransaction {
+  id        String   @id @default(cuid())
+  dealerId  String
+  dealer    Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  amount    Float
+  type      String
+  note      String?
+  createdAt DateTime @default(now())
+}
+
+model Category {
+  id         String    @id @default(cuid())
+  name       String
+  nameEn     String?
+  slug       String
+  image      String?
+  order      Int       @default(0)
+  isActive   Boolean   @default(true)
+  businessId String
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  products   Product[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([businessId, slug])
+}
+
+model Product {
+  id            String      @id @default(cuid())
+  name          String
+  nameEn        String?
+  description   String?
+  descriptionEn String?
+  price         Float
+  image         String?
+  calories      Int?
+  allergens     Json     @default("[]")
+  ingredients   String?
+  isActive      Boolean     @default(true)
+  order         Int         @default(0)
+  categoryId    String
+  category      Category    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  businessId    String
+  business      Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  orderItems    OrderItem[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model VariantTemplate {
+  id         String          @id @default(cuid())
+  name       String
+  isRequired Boolean         @default(false)
+  isMultiple Boolean         @default(false)
+  options    VariantOption[]
+  businessId String
+  business   Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdAt  DateTime        @default(now())
+}
+
+model VariantOption {
+  id              String          @id @default(cuid())
+  name            String
+  priceAdjustment Float           @default(0)
+  templateId      String
+  template        VariantTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+}
+
+model Table {
+  id          String       @id @default(cuid())
+  number      Int
+  name        String?
+  qrCode      String?
+  status      TableStatus  @default(EMPTY)
+  capacity    Int          @default(4)
+  businessId  String
+  business    Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  orders      Order[]
+  waiterCalls WaiterCall[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@unique([businessId, number])
+}
+
+model Order {
+  id          String      @id @default(cuid())
+  orderNumber String
+  status      OrderStatus @default(PENDING)
+  total       Float
+  note        String?
+  tableId     String?
+  table       Table?      @relation(fields: [tableId], references: [id])
+  businessId  String
+  business    Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  items       OrderItem[]
+  deliveredAt DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int
+  price     Float
+  notes     String?
+}
+
+model WaiterCall {
+  id         String     @id @default(cuid())
+  tableId    String?
+  table      Table?     @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  businessId String
+  business   Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  status     CallStatus @default(PENDING)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+}
+
+model Feedback {
+  id         String   @id @default(cuid())
+  rating     Int
+  comment    String?
+  tableId    String?
+  clientIp   String?
+  isBlocked  Boolean  @default(false)
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+}
+
+model Subscription {
+  id         String             @id @default(cuid())
+  businessId String             @unique
+  business   Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  status     SubscriptionStatus @default(TRIAL)
+  plan       String             @default("STANDARD")
+  startDate  DateTime           @default(now())
+  endDate    DateTime
+  aiCredits  Int                @default(10)
+  price      Float              @default(0)
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+}
+
+model BusinessSettings {
+  id               String   @id @default(cuid())
+  businessId       String   @unique
+  business         Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  logoUrl          String?
+  coverUrl         String?
+  primaryColor     String   @default("#7C3AED")
+  welcomeMessage   String?
+  welcomeVideo     String?
+  showCalories     Boolean  @default(true)
+  showAllergens    Boolean  @default(true)
+  currency         String   @default("TRY")
+  languages        Json     @default("[\"tr\"]")
+  defaultLanguage  String   @default("tr")
+  googleRatingUrl  String?
+  whatsappNumber   String?
+  instagram        String?
+  facebook         String?
+  tiktok           String?
+  youtube          String?
+  sector           String   @default("restaurant")
+  address          String?
+  phone            String?
+  email            String?
+  openHours        String?
+  enableOrdering   Boolean  @default(true)
+  enableWaiterCall Boolean  @default(true)
+  enableFeedback   Boolean  @default(true)
+  exampleImageNote Boolean  @default(false)
+  updatedAt        DateTime @updatedAt
+}
+
+model Announcement {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  title      String
+  content    String?
+  imageUrl   String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
